@@ -1,0 +1,403 @@
+import React, { useState } from 'react';
+import { Upload, Download, Loader, AlertTriangle, XCircle, CheckSquare, Square } from 'lucide-react';
+
+// --- Data ---
+
+// רשימה מורחבת של הנחיות לבחירה (בעברית, עם דגש על ריאליזם)
+const allPrompts = [
+  // Portraits
+  { id: 'p1', group: 'פורטרטים', text: 'פורטרט פוטו-ריאליסטי ברזולוציה גבוהה, מבט ישיר למצלמה, תאורת סטודיו.', selected: true },
+  { id: 'p2', group: 'פורטרטים', text: 'צילום קולנועי, זווית 3/4 עם חיוך חם, תאורה טבעית ורכה.', selected: true },
+  { id: 'p3', group: 'פורטרטים', text: 'צילום פרופיל במבט מהורהר, על רקע נוף עירוני מטושטש.', selected: true },
+  { id: 'p4', group: 'פורטרטים', text: 'קלוז-אפ על העיניים, מבט המביע רגש עז, תאורה דרמטית.', selected: true },
+  { id: 'p5', group: 'פורטרטים', text: 'תמונת קנדיד (לא מבוימת) של צחוק ושמחה, בסביבה חיצונית.', selected: true },
+  { id: 'p6', group: 'פורטרטים', text: 'תמונת "הדשוט" עסקית ומרשימה, על רקע אפור אחיד.', selected: false },
+  { id: 'p7', group: 'פורטרטים', text: 'צילום אומנותי בשחור-לבן, ניגודיות גבוהה.', selected: false },
+
+  // Body Shots & Poses
+  { id: 'b1', group: 'צילומי גוף ותנוחות', text: 'תמונה גוף מלאה, הליכה ברחוב עירוני מודרני בלילה.', selected: true },
+  { id: 'b2', group: 'צילומי גוף ותנוחות', text: 'נשען/ת על קיר לבנים, לבוש/ה במעיל עור אופנתי.', selected: true },
+  { id: 'b3', group: 'צילומי גוף ותנוחות', text: 'צילום אקשן בתנועה של ריצה, עם טשטוש תנועה ברקע.', selected: true },
+  { id: 'b4', group: 'צילומי גוף ותנוחות', text: 'צילום מזווית נמוכה המקנה מראה עוצמתי, על רקע שמיים מעוננים.', selected: true },
+  { id: 'b5', group: 'צילומי גוף ותנוחות', text: 'יושב/ת בבית קפה עם ספל קפה, בתנוחה נינוחה.', selected: true },
+  { id: 'b6', group: 'צילומי גוף ותנוחות', text: 'צילום מהגב, במבט אל עבר רכס הרים בזמן שקיעה.', selected: false },
+  { id: 'b7', group: 'צילומי גוף ותנוחות', text: 'תמונה דינמית של ריקוד ושמחה במסיבה.', selected: false },
+  
+  // Thematic & Stylized
+  { id: 't1', group: 'נושא וסגנון', text: 'צילום ריאליסטי של אדם לבוש בתלבושת פנטזיה של הרפתקן.', selected: true },
+  { id: 't2', group: 'נושא וסגנון', text: 'צילום אופנה בסגנון סייברפאנק, עם השתקפויות אורות ניאון.', selected: true },
+  { id: 't3', group: 'נושא וסגנון', text: 'צילום מבויים כמדען/ית במעבדה הייטק מודרנית.', selected: true },
+  { id: 't4', group: 'נושא וסגנון', text: 'קורא/ת ספר בספרייה נעימה עם תאורה חמה ועמומה.', selected: true },
+  { id: 't5', group: 'נושא וסגנון', text: 'צילום אופנה אלגנטי בסגנון סוכן/ת חשאי/ת בקזינו.', selected: true },
+  { id: 't6', group: 'נושא וסגנון', text: 'צילום ריאליסטי של אדם לבוש בתלבושת מלכותית היסטורית בארמון.', selected: false },
+  { id: 't7', group: 'נושא וסגנון', text: 'צילום מבויים כאסטרונאוט/ית על רקע המדמה את כוכב מאדים.', selected: false },
+];
+
+// --- Diversity Options for Image Generation ---
+const diversityOptions = {
+    clothing: [
+        "wearing a different outfit", "in fashionable streetwear", "in an elegant evening gown",
+        "in casual and comfortable clothes", "in a professional business suit", "in a futuristic costume",
+        "wearing a classic trench coat", "in a denim jacket and t-shirt"
+    ],
+    hair: [
+        "with a different hairstyle", "with long, flowing hair", "with a short, chic haircut",
+        "with an elaborate updo", "with brightly colored hair", "with braids", "with curly hair"
+    ],
+    makeup: [
+        "with natural makeup", "with dramatic, artistic makeup", "with no makeup at all",
+        "with glamorous evening makeup", "with minimalistic makeup"
+    ],
+};
+
+
+// --- Main App Component ---
+
+export default function App() {
+  const [uploadedImage, setUploadedImage] = useState(null);
+  const [generatedImages, setGeneratedImages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [promptChoices, setPromptChoices] = useState(allPrompts);
+  const [selectedImage, setSelectedImage] = useState(null); // For lightbox
+  const [aiTheme, setAiTheme] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+
+  // טיפול בהעלאת התמונה
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedImage(reader.result);
+        setGeneratedImages([]);
+        setErrorMessage('');
+      };
+      reader.readAsDataURL(file);
+    } else {
+        setErrorMessage('אנא בחר קובץ תמונה תקין.');
+        setUploadedImage(null);
+    }
+  };
+
+  // החלפת מצב בחירה של הנחיה
+  const handleTogglePrompt = (id) => {
+    setPromptChoices(
+      promptChoices.map(p =>
+        p.id === id ? { ...p, selected: !p.selected } : p
+      )
+    );
+  };
+    
+  // פונקציה להמרת Data URL לבסיס 64 נקי
+  const getBase64FromDataUrl = (dataUrl) => {
+    return dataUrl.split(',')[1];
+  };
+    
+  // ✨ Gemini API: יצירת הצעות לסצנות באמצעות LLM
+  const handleGenerateAiPrompts = async () => {
+    if (!aiTheme) return;
+
+    setIsAiLoading(true);
+    setErrorMessage('');
+    const apiKey = ""; // API key is injected at runtime
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+    const systemPrompt = "You are a creative assistant helping an artist generate diverse images of a single character. Your task is to brainstorm descriptive prompts in HEBREW based on a given theme, with a strong emphasis on photorealism. You must respond with only a valid JSON array of 5 unique Hebrew strings. Each string should be a concise prompt for a realistic image. Do not add any other text or explanations. The output must be in Hebrew.";
+    const userQuery = `נושא: "${aiTheme}". צור 5 הנחיות פוטו-ריאליסטיות בעברית.`;
+
+    try {
+        const payload = {
+            contents: [{ parts: [{ text: userQuery }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: { type: "ARRAY", items: { type: "STRING" } }
+            }
+        };
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('Network response was not ok');
+
+        const result = await response.json();
+        const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (generatedText) {
+            const newPromptsText = JSON.parse(generatedText);
+            const newPromptObjects = newPromptsText.map((text, index) => ({
+                id: `ai-${Date.now()}-${index}`,
+                group: 'הצעות AI',
+                text: text, // Text is now in Hebrew from the API
+                selected: true
+            }));
+            
+            setPromptChoices(prev => {
+                const nonAiPrompts = prev.filter(p => p.group !== 'הצעות AI');
+                return [...nonAiPrompts, ...newPromptObjects];
+            });
+            setAiTheme('');
+        } else {
+            throw new Error("No content received from AI.");
+        }
+    } catch (error) {
+        console.error("Error generating AI prompts:", error);
+        setErrorMessage("לא הצלחנו ליצור הצעות. נסה שוב.");
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
+
+  // הפונקציה המרכזית ליצירת התמונות
+  const generateImageSet = async () => {
+    if (!uploadedImage) {
+      setErrorMessage('יש להעלות תמונה תחילה.');
+      return;
+    }
+
+    const selectedPrompts = promptChoices.filter(p => p.selected);
+    if (selectedPrompts.length === 0) {
+        setErrorMessage('יש לבחור לפחות הנחיה אחת.');
+        return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage('');
+    setGeneratedImages([]);
+    setProgress(0);
+
+    const base64ImageData = getBase64FromDataUrl(uploadedImage);
+    const apiKey = "";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+
+    for (let i = 0; i < selectedPrompts.length; i++) {
+      try {
+        const prompt = selectedPrompts[i];
+
+        // --- Create diverse prompt ---
+        const randomClothing = diversityOptions.clothing[Math.floor(Math.random() * diversityOptions.clothing.length)];
+        const randomHair = diversityOptions.hair[Math.floor(Math.random() * diversityOptions.hair.length)];
+        const randomMakeup = diversityOptions.makeup[Math.floor(Math.random() * diversityOptions.makeup.length)];
+        const fullPrompt = `Photorealistic image of: ${prompt.text}, the person is ${randomClothing}, ${randomHair}, and ${randomMakeup}, based on the character`;
+
+        const payload = {
+          contents: [{
+            parts: [
+              { text: fullPrompt }, // Use the new diverse prompt
+              { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE']
+          },
+        };
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `Server error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+        
+        if (base64Data) {
+            setGeneratedImages(prevImages => [...prevImages, `data:image/png;base64,${base64Data}`]);
+        } else {
+            console.warn(`No image received for prompt #${i + 1}`);
+        }
+        
+      } catch (error) {
+        console.error(`Error generating image ${i + 1}:`, error);
+        setErrorMessage(`אירעה שגיאה ביצירת תמונה ${i + 1}. נסה שוב מאוחר יותר.`);
+      } finally {
+        setProgress(prev => prev + 1);
+      }
+    }
+    
+    setIsLoading(false);
+  };
+
+  // הורדת כל התמונות כקובץ ZIP
+  const downloadAllAsZip = async () => {
+    if (generatedImages.length === 0) return;
+    try {
+      const JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
+      const { saveAs } = await import('https://esm.sh/file-saver@2.0.5');
+      
+      const zip = new JSZip();
+      generatedImages.forEach((imgDataUrl, index) => {
+        const base64Data = getBase64FromDataUrl(imgDataUrl);
+        zip.file(`image_${index + 1}.png`, base64Data, { base64: true });
+      });
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, "lora_dataset.zip");
+    } catch (error) {
+        console.error("Error creating ZIP file:", error);
+        setErrorMessage("לא ניתן היה ליצור את קובץ ה-ZIP.");
+    }
+  };
+    
+  const selectedCount = promptChoices.filter(p => p.selected).length;
+  const promptGroups = [...new Set(promptChoices.map(p => p.group))];
+
+  return (
+    <>
+      {/* Lightbox Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors">
+            <XCircle size={40} />
+          </button>
+          <img 
+            src={selectedImage} 
+            alt="Selected generated" 
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking on the image
+          />
+        </div>
+      )}
+
+      <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-8 flex flex-col items-center">
+        <div className="w-full max-w-6xl">
+          <header className="text-center mb-8">
+            <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+              מחולל סט תמונות ל-LoRA
+            </h1>
+            <p className="text-gray-400 mt-2">
+              העלה תמונה, בחר סצנות או קבל השראה מה-AI, וצור סט תמונות מגוון ומותאם אישית.
+            </p>
+          </header>
+
+          <main className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Column: Setup */}
+            <div className="flex flex-col gap-8">
+              {/* Upload Section */}
+              <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">שלב 1: העלאת תמונת בסיס</h2>
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  <label htmlFor="image-upload" className="w-full md:w-52 h-52 border-2 border-dashed border-gray-600 rounded-lg flex flex-col justify-center items-center cursor-pointer hover:bg-gray-700 hover:border-purple-400 transition-colors flex-shrink-0">
+                    {uploadedImage ? <img src={uploadedImage} alt="Uploaded preview" className="w-full h-full object-cover rounded-lg" /> : <Upload className="w-12 h-12 text-gray-500" />}
+                  </label>
+                  <input id="image-upload" type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                  <p className="text-gray-300 flex-1 text-center md:text-right">בחר תמונה ברורה של הדמות. עדיף תמונת פורטרט עם פנים גלויות.</p>
+                </div>
+              </div>
+              
+              {/* Prompts Section */}
+              <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">שלב 2: בחירת סצנות ופוזות</h2>
+                {/* ✨ New AI Prompt Generator section */}
+                <div className="my-4 p-4 bg-gray-700/50 rounded-lg border border-purple-500/30">
+                    <label htmlFor="ai-theme" className="block text-sm font-medium text-gray-300 mb-2">רוצה עוד רעיונות? תאר נושא ו-AI יציע לך סצנות נוספות:</label>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            id="ai-theme"
+                            value={aiTheme}
+                            onChange={(e) => setAiTheme(e.target.value)}
+                            placeholder="לדוגמה: בלש בסגנון פילם נואר"
+                            className="flex-grow bg-gray-900 border border-gray-600 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                        />
+                        <button
+                            onClick={handleGenerateAiPrompts}
+                            disabled={isAiLoading || !aiTheme}
+                            className="flex-shrink-0 px-4 py-2 bg-purple-600 text-white font-semibold rounded-md hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        >
+                            {isAiLoading ? <Loader className="animate-spin w-5 h-5" /> : '✨ הצע לי'}
+                        </button>
+                    </div>
+                </div>
+                <div className="max-h-80 overflow-y-auto pr-2 space-y-4">
+                  {promptGroups.map(group => (
+                    <div key={group}>
+                        <h3 className="text-lg font-semibold text-purple-300 mb-2">{group}</h3>
+                        {promptChoices.filter(p => p.group === group).map(prompt => (
+                            <label key={prompt.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-700 cursor-pointer transition-colors">
+                                <input type="checkbox" checked={prompt.selected} onChange={() => handleTogglePrompt(prompt.id)} className="hidden" />
+                                {prompt.selected ? <CheckSquare className="text-purple-400 w-5 h-5 flex-shrink-0" /> : <Square className="text-gray-500 w-5 h-5 flex-shrink-0" />}
+                                <span className="text-gray-300">{prompt.text}</span>
+                            </label>
+                        ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Generation Button */}
+              <div className="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+                 <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">שלב 3: יצירה</h2>
+                <button
+                  onClick={generateImageSet}
+                  disabled={!uploadedImage || isLoading || selectedCount === 0}
+                  className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg shadow-lg text-lg transform hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <Loader className="animate-spin" />
+                      <span>יוצר תמונות... ({progress}/{selectedCount})</span>
+                    </div>
+                  ) : `צור ${selectedCount} תמונות`}
+                </button>
+                 {errorMessage && (
+                  <div className="mt-4 bg-red-900/50 border border-red-700 text-red-300 px-4 py-2 rounded-lg flex items-center gap-2">
+                      <AlertTriangle size={20} />
+                      <span>{errorMessage}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Results */}
+            <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                    <h2 className="text-2xl font-semibold">שלב 4: תוצאות</h2>
+                    {generatedImages.length > 0 && !isLoading && (
+                        <button onClick={downloadAllAsZip} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                            <Download size={20} />
+                            <span>הורד הכל (ZIP)</span>
+                        </button>
+                    )}
+                </div>
+                {generatedImages.length === 0 && !isLoading && (
+                    <div className="h-full flex flex-col justify-center items-center text-gray-500">
+                        <div className="w-24 h-24 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center mb-4">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                        </div>
+                        <p>התמונות שייווצרו יופיעו כאן בזמן אמת.</p>
+                    </div>
+                )}
+                 {isLoading && generatedImages.length === 0 && (
+                    <div className="h-full flex justify-center items-center">
+                        <Loader className="w-16 h-16 text-purple-400 animate-spin" />
+                    </div>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {generatedImages.map((src, index) => (
+                    <div key={index} className="aspect-square bg-gray-700 rounded-lg overflow-hidden shadow-md cursor-pointer transform hover:scale-105 transition-transform" onClick={() => setSelectedImage(src)}>
+                      <img src={src} alt={`Generated image ${index + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </>
+  );
+}
+
