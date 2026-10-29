@@ -1,0 +1,17 @@
+# Core
+PyQt6>=6.6
+PyQt6-WebEngine>=6.6
+stem>=1.8
+requests[socks]>=2.31        # [socks] pulls PySocks for socks5h:// through Tor
+# Accounts & encryption
+cryptography>=42
+argon2-cffi>=23.1
+pyotp>=2.9
+qrcode>=7.4
+# Google Drive vault
+google-auth>=2.29
+google-auth-oauthlib>=1.2
+# Translation
+langdetect>=1.0.9
+# Optional offline translation engine (large download, recommended for privacy):
+# argostranslate>=1.9
