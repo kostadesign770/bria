@@ -72,6 +72,17 @@ jobs:
           if ($log) { Get-Content $log.FullName -Tail 25 }
           if ((Get-Content $report -Raw) -notmatch "\.onion/ -> OK") { throw "no .onion site loaded" }
 
+      - name: UI test - typing .onion addresses in the real window
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $report = "$env:RUNNER_TEMP\uitest.txt"
+          $p = Start-Process dist/CyberBrowser/CyberBrowser.exe -ArgumentList "--ui-test", $report -PassThru
+          if (-not $p.WaitForExit(900000)) { $p.Kill(); throw "ui test timed out" }
+          if (-not (Test-Path $report)) { throw "ui test crashed (exit $($p.ExitCode))" }
+          Get-Content $report
+          if ((Get-Content $report -Raw) -notmatch "onion.* OK title") { throw "no .onion site loaded from the address bar" }
+
       - name: Upload portable zip
         uses: actions/upload-artifact@v4
         with:

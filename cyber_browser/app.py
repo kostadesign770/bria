@@ -371,8 +371,91 @@ def network_test(report: str) -> None:
     qapp.exec()
 
 
+UI_TEST_INPUTS = (
+    "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion",
+    "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion",
+    "http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/",
+)
+
+
+def ui_test(report: str) -> None:
+    """``CyberBrowser.exe --ui-test <file>``: the real browser window (guest mode) with
+    addresses typed into the address bar exactly as a user would, through the bundled Tor."""
+    from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo
+
+    configure_engine()
+    qapp = QApplication(sys.argv[:1])
+    qapp.setQuitOnLastWindowClosed(False)
+    configure_proxy()
+    launcher = TorLauncher()
+    lines = [f"tor_started={launcher.ensure_running()}"]
+    controller = AppController(qapp)
+    controller.window = window = BrowserWindow(controller)
+    window.show()
+    queue = list(UI_TEST_INPUTS)
+    S = QWebEngineLoadingInfo.LoadStatus
+    state = {"waited": 0}
+
+    def finish() -> None:
+        lines.append(f"final_tor_state={window.tor_state} status={window.tor_label.text()!r}")
+        with open(report, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        launcher.stop()
+        qapp.quit()
+
+    def wait_for_tor() -> None:
+        if window.tor_state == "ok":
+            lines.append(f"tor_ok_after={state['waited']}s ip={window.ip_label.text()!r}")
+            QTimer.singleShot(5000, next_input)   # let the home page load first
+        elif state["waited"] > 240:
+            lines.append(f"tor never ok: {window.tor_state} {window._tor_detail!r}")
+            finish()
+        else:
+            state["waited"] += 2
+            window.check_tor()
+            QTimer.singleShot(2000, wait_for_tor)
+
+    def next_input() -> None:
+        if not queue:
+            finish()
+            return
+        text = queue.pop(0)
+        started = time.monotonic()
+        page = window.page
+        timer = QTimer(window)
+        timer.setSingleShot(True)
+
+        def done(result: str) -> None:
+            timer.stop()
+            try:
+                page.loadingChanged.disconnect(changed)
+            except TypeError:
+                pass
+            lines.append(f"typed {text!r} -> url={window.view.url().toString()!r} {result} "
+                         f"({time.monotonic() - started:.0f}s) bar={window.address.text()!r}")
+            QTimer.singleShot(0, next_input)
+
+        def changed(info) -> None:
+            if info.status() == S.LoadSucceededStatus:
+                done(f"OK title={window.view.title()!r}")
+            elif info.status() == S.LoadFailedStatus:
+                done(f"FAILED code={info.errorCode()} {info.errorString()}")
+
+        page.loadingChanged.connect(changed)
+        timer.timeout.connect(lambda: done("TIMEOUT"))
+        timer.start(120_000)
+        window.address.setText(text)
+        window.navigate()
+
+    QTimer.singleShot(1000, wait_for_tor)
+    qapp.exec()
+
+
 def main() -> None:
     logging.basicConfig(level=os.environ.get("CYBER_LOG", "WARNING"))
+    if len(sys.argv) > 2 and sys.argv[1] == "--ui-test":
+        ui_test(sys.argv[2])
+        return
     if len(sys.argv) > 2 and sys.argv[1] == "--self-test":
         self_test(sys.argv[2])
         return
