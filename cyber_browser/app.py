@@ -23,6 +23,7 @@ from cyber_browser import config
 from cyber_browser.auth.crypto_vault import UserVault
 from cyber_browser.auth.idle_lock import IdleLock
 from cyber_browser.core.tor_controller import TorController
+from cyber_browser.core.tor_launcher import TorLauncher
 from cyber_browser.core.workers import run_async
 from cyber_browser.drive import drive_client
 from cyber_browser.drive.transfer import TransferManager
@@ -268,6 +269,10 @@ def main() -> None:
     qapp.setApplicationDisplayName(config.APP_DISPLAY_NAME)
     qapp.setQuitOnLastWindowClosed(False)   # the lock screen closes all windows
     configure_proxy()
+    # Portable build: start the bundled Tor if no Tor is running yet.
+    tor_launcher = TorLauncher()
+    tor_launcher.ensure_running()
+    qapp.aboutToQuit.connect(tor_launcher.stop)
     controller = AppController(qapp)
     QTimer.singleShot(0, controller.start)
     sys.exit(qapp.exec())

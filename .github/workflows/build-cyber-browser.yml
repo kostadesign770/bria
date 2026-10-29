@@ -1,0 +1,58 @@
+name: Build Cyber Browser (Windows portable)
+
+on:
+  push:
+    paths:
+      - "cyber_browser/**"
+      - ".github/workflows/build-cyber-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r cyber_browser/requirements.txt pyinstaller pytest
+
+      - name: Unit tests
+        run: python -m pytest cyber_browser/tests -q
+
+      - name: Download Tor Expert Bundle
+        run: python cyber_browser/packaging/fetch_tor.py build/tor_bundle
+
+      - name: Build with PyInstaller
+        run: >
+          pyinstaller --noconfirm --clean --windowed --name CyberBrowser
+          --paths .
+          --add-data "cyber_browser/translate/translate_page.js;cyber_browser/translate"
+          --add-data "build/tor_bundle;tor_bundle"
+          --collect-data langdetect
+          --collect-submodules cyber_browser
+          cyber_browser/packaging/launch.py
+
+      - name: Check the build
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/CyberBrowser/CyberBrowser.exe)) { throw "exe missing" }
+          $tor = Get-ChildItem -Recurse dist/CyberBrowser -Filter tor.exe | Select-Object -First 1
+          if (-not $tor) { throw "bundled tor.exe missing" }
+          & $tor.FullName --version
+          Copy-Item cyber_browser/README.md dist/CyberBrowser/README.md
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: CyberBrowser-Windows-portable
+          path: dist/CyberBrowser
+          retention-days: 30
