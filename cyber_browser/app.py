@@ -15,7 +15,7 @@ import time
 
 # QtWebEngineWidgets must be imported before QApplication is created.
 from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
-from PyQt6.QtCore import QObject, Qt, QTimer
+from PyQt6.QtCore import QObject, Qt, QTimer, QUrl
 from PyQt6.QtNetwork import QNetworkProxy
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
 
@@ -293,10 +293,91 @@ def self_test(report: str) -> None:
     del page, profile
 
 
+NETWORK_TEST_URLS = (
+    "https://check.torproject.org/api/ip",
+    "http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/",
+    "https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/",
+    "http://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/",
+)
+
+
+def network_test(report: str) -> None:
+    """``CyberBrowser.exe --network-test <file>``: real end-to-end check through the
+    bundled Tor – the engine loads a clearnet check page and several .onion sites with
+    the same profile hardening as the browser, and every result/error code is recorded."""
+    from PyQt6.QtWebEngineCore import QWebEngineLoadingInfo, QWebEnginePage, QWebEngineProfile
+    from cyber_browser.security import fingerprint
+    from cyber_browser.security.permissions import apply_security_level, harden_profile
+
+    configure_engine()
+    qapp = QApplication(sys.argv[:1])
+    configure_proxy()
+    lines = [f"chromium_flags={os.environ.get('QTWEBENGINE_CHROMIUM_FLAGS')}"]
+    launcher = TorLauncher()
+    lines.append(f"tor_started={launcher.ensure_running()}")
+    tor = TorController()
+    deadline = time.monotonic() + 180
+    health = tor.health()
+    while time.monotonic() < deadline and not health.circuit_ok:
+        time.sleep(2)
+        health = tor.health()
+    lines.append(f"tor_health={health}")
+
+    profile = QWebEngineProfile()
+    harden_profile(profile)
+    fingerprint.install(profile, config.DEFAULT_SITE_LANGUAGE)
+    apply_security_level(profile.settings(), "standard")
+    page = QWebEnginePage(profile)
+    queue = list(NETWORK_TEST_URLS)
+    S = QWebEngineLoadingInfo.LoadStatus
+
+    def write_and_quit() -> None:
+        launcher.stop()
+        with open(report, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        qapp.quit()
+
+    def next_url() -> None:
+        if not queue:
+            write_and_quit()
+            return
+        url = queue.pop(0)
+        started = time.monotonic()
+        timer = QTimer()
+        timer.setSingleShot(True)
+
+        def done(text: str) -> None:
+            timer.stop()
+            try:
+                page.loadingChanged.disconnect()
+            except TypeError:
+                pass
+            lines.append(f"{url} -> {text} ({time.monotonic() - started:.0f}s)")
+            QTimer.singleShot(0, next_url)
+
+        def changed(info) -> None:
+            if info.status() == S.LoadSucceededStatus:
+                page.toPlainText(lambda t: done(f"OK title={page.title()!r} text={t[:120]!r}"))
+            elif info.status() == S.LoadFailedStatus:
+                done(f"FAILED code={info.errorCode()} domain={info.errorDomain().name} {info.errorString()}")
+
+        page.loadingChanged.connect(changed)
+        timer.timeout.connect(lambda: done("TIMEOUT"))
+        timer.start(120_000)
+        page._timer = timer  # keep a reference
+        page.setUrl(QUrl(url))
+
+    QTimer.singleShot(0, next_url)
+    qapp.exec()
+
+
 def main() -> None:
     logging.basicConfig(level=os.environ.get("CYBER_LOG", "WARNING"))
     if len(sys.argv) > 2 and sys.argv[1] == "--self-test":
         self_test(sys.argv[2])
+        return
+    if len(sys.argv) > 2 and sys.argv[1] == "--network-test":
+        network_test(sys.argv[2])
         return
     configure_engine()
     qapp = QApplication(sys.argv)

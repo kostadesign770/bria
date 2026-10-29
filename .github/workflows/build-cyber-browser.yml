@@ -59,6 +59,19 @@ jobs:
           if ($text -notmatch "tor_socks=True") { throw "bundled Tor did not start" }
           Copy-Item cyber_browser/README.md dist/CyberBrowser/README.md
 
+      - name: Network test through real Tor (.onion)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $report = "$env:RUNNER_TEMP\nettest.txt"
+          $p = Start-Process dist/CyberBrowser/CyberBrowser.exe -ArgumentList "--network-test", $report -PassThru
+          if (-not $p.WaitForExit(900000)) { $p.Kill(); throw "network test timed out" }
+          if (-not (Test-Path $report)) { throw "network test crashed (exit $($p.ExitCode))" }
+          Get-Content $report
+          $log = Get-ChildItem -Recurse $env:APPDATA/CyberBrowser -Filter tor.log -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { Get-Content $log.FullName -Tail 25 }
+          if ((Get-Content $report -Raw) -notmatch "\.onion/ -> OK") { throw "no .onion site loaded" }
+
       - name: Upload portable zip
         uses: actions/upload-artifact@v4
         with:
