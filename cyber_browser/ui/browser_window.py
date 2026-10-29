@@ -36,7 +36,7 @@ from cyber_browser.core.ip_info import IpInfo, fetch_ip_info
 from cyber_browser.core.tor_controller import FALLBACK_EXIT_COUNTRIES, TorControlError, TorHealth
 from cyber_browser.core.workers import run_async
 from cyber_browser.i18n.countries import country_name
-from cyber_browser.i18n.strings import language, tr
+from cyber_browser.i18n.strings import language, language_name, tr
 from cyber_browser.security import fingerprint
 from cyber_browser.security.permissions import apply_security_level, harden_page, harden_profile
 from cyber_browser.translate.translator import (
@@ -659,9 +659,7 @@ class BrowserWindow(QMainWindow):
         if self.app.settings["tr_mode"] == "always":
             self.translate_page()
         else:
-            from PyQt6.QtCore import QLocale
-            self.translate_label.setText(tr("tr_offer", lang=QLocale(lang).nativeLanguageName() or lang,
-                                            target=tr("lang_he") if language() == "he" else "English"))
+            self.translate_label.setText(tr("tr_offer", lang=language_name(lang), target=language_name(language())))
             self.translate_bar.show()
 
     def translate_page(self) -> None:

@@ -261,8 +261,43 @@ def configure_proxy() -> None:
                                                     config.TOR_SOCKS_HOST, config.TOR_SOCKS_PORT))
 
 
+def self_test(report: str) -> None:
+    """``CyberBrowser.exe --self-test <file>``: used by the build to prove the packaged
+    app really starts – Qt WebEngine loads a page and the bundled Tor answers SOCKS."""
+    from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
+
+    configure_engine()
+    qapp = QApplication(sys.argv[:1])
+    configure_proxy()
+    results: list[str] = []
+    launcher = TorLauncher()
+    results.append(f"tor_started={launcher.ensure_running()}")
+    profile = QWebEngineProfile()
+    page = QWebEnginePage(profile)
+
+    def finish(ok: bool) -> None:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not TorController()._socks_handshake():
+            time.sleep(1)
+        results.append(f"webengine_ok={ok}")
+        results.append(f"tor_socks={TorController()._socks_handshake()}")
+        launcher.stop()
+        with open(report, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(results) + "\n")
+        qapp.exit(0 if ok else 1)
+
+    page.loadFinished.connect(finish)
+    page.setHtml("<p>self-test</p>")
+    QTimer.singleShot(60_000, lambda: finish(False))
+    qapp.exec()
+    del page, profile
+
+
 def main() -> None:
     logging.basicConfig(level=os.environ.get("CYBER_LOG", "WARNING"))
+    if len(sys.argv) > 2 and sys.argv[1] == "--self-test":
+        self_test(sys.argv[2])
+        return
     configure_engine()
     qapp = QApplication(sys.argv)
     qapp.setApplicationName(config.APP_NAME)

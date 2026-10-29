@@ -272,5 +272,23 @@ def tr(key: str, **kwargs: object) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
+_LANGUAGE_NAMES_HE = {
+    "en": "אנגלית", "he": "עברית", "ar": "ערבית", "ru": "רוסית", "fr": "צרפתית", "de": "גרמנית",
+    "es": "ספרדית", "it": "איטלקית", "pt": "פורטוגזית", "zh": "סינית", "ja": "יפנית", "ko": "קוריאנית",
+    "tr": "טורקית", "nl": "הולנדית", "pl": "פולנית", "uk": "אוקראינית", "fa": "פרסית", "hi": "הינדי",
+    "el": "יוונית", "sv": "שוודית", "ro": "רומנית", "hu": "הונגרית", "cs": "צ'כית", "am": "אמהרית",
+}
+
+
+def language_name(code: str) -> str:
+    """Name of a page language in the current UI language (e.g. "en" -> "אנגלית" / "English")."""
+    if _lang == "he" and code in _LANGUAGE_NAMES_HE:
+        return _LANGUAGE_NAMES_HE[code]
+    from PyQt6.QtCore import QLocale
+
+    name = QLocale.languageToString(QLocale(code).language())
+    return name if name and name != "C" else code
+
+
 def is_rtl() -> bool:
     return _lang == "he"

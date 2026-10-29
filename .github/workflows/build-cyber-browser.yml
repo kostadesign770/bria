@@ -48,6 +48,15 @@ jobs:
           $tor = Get-ChildItem -Recurse dist/CyberBrowser -Filter tor.exe | Select-Object -First 1
           if (-not $tor) { throw "bundled tor.exe missing" }
           & $tor.FullName --version
+          # Really start the packaged app: Qt WebEngine must load and the bundled Tor must answer.
+          $report = "$env:RUNNER_TEMP\selftest.txt"
+          $p = Start-Process dist/CyberBrowser/CyberBrowser.exe -ArgumentList "--self-test", $report -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "self-test timed out" }
+          if (-not (Test-Path $report)) { throw "self-test crashed (exit $($p.ExitCode)) - no report" }
+          Get-Content $report
+          $text = Get-Content $report -Raw
+          if ($text -notmatch "webengine_ok=True") { throw "Qt WebEngine failed to start" }
+          if ($text -notmatch "tor_socks=True") { throw "bundled Tor did not start" }
           Copy-Item cyber_browser/README.md dist/CyberBrowser/README.md
 
       - name: Upload portable zip
