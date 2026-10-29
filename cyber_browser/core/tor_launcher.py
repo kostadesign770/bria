@@ -56,7 +56,8 @@ class TorLauncher:
         state = config.data_dir() / "tor"
         state.mkdir(parents=True, exist_ok=True)
         lines = [
-            f"SocksPort {config.TOR_SOCKS_HOST}:{config.TOR_SOCKS_PORT}",
+            # ExtendedErrors: precise SOCKS reply codes for .onion failures (see onion_probe.py)
+            f"SocksPort {config.TOR_SOCKS_HOST}:{config.TOR_SOCKS_PORT} ExtendedErrors",
             f"ControlPort {config.TOR_SOCKS_HOST}:{config.TOR_CONTROL_PORT}",
             "CookieAuthentication 1",
             f"DataDirectory {state / 'state'}",

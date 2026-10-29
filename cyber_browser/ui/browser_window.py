@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 )
 
 from cyber_browser import config
+from cyber_browser.core import onion_probe
 from cyber_browser.core.ip_info import IpInfo, fetch_ip_info
 from cyber_browser.core.tor_controller import FALLBACK_EXIT_COUNTRIES, TorControlError, TorHealth
 from cyber_browser.core.workers import run_async
@@ -236,6 +237,12 @@ class BrowserWindow(QMainWindow):
         tr_buttons.addWidget(self.tr_orig_btn)
         layout.addWidget(self.translate_bar)
 
+        self.onion_bar, self.onion_label, onion_buttons = self._make_bar("#fce4ec")
+        self.onion_retry = QPushButton()
+        self.onion_retry.clicked.connect(lambda: self.view.reload())
+        onion_buttons.addWidget(self.onion_retry)
+        layout.addWidget(self.onion_bar)
+
         self.stack = QStackedWidget()
         self.view = QWebEngineView()
         self.view.setAcceptDrops(False)
@@ -347,6 +354,7 @@ class BrowserWindow(QMainWindow):
         self.logout_btn.setText(tr("logout_btn"))
         self.insecure_continue.setText(tr("insecure_continue"))
         self.tr_do_btn.setText(tr("tr_do"))
+        self.onion_retry.setText(tr("onion_retry"))
         self.tr_orig_btn.setText(tr("tr_original"))
         self.blocked_retry.setText(tr("ks_retry"))
         vault = self.app.vault
@@ -633,13 +641,35 @@ class BrowserWindow(QMainWindow):
 
     def _on_load_finished(self, ok: bool) -> None:
         self.translate_bar.hide()
+        self.onion_bar.hide()
         if ok:
             self.insecure_bar.hide()
+        elif self.tor_state == "ok" and self.view.url().host().lower().endswith(".onion"):
+            self._explain_onion_failure(self.view.url())
         self._page_lang = None
         if not ok or self.app.settings["tr_mode"] == "off":
             return
         page = self.page
         self._detect_language(lambda lang: self._maybe_offer_translation(page, lang))
+
+    def _explain_onion_failure(self, url: QUrl) -> None:
+        """Ask Tor for the exact reason a .onion site failed and show it in a bar."""
+        host = url.host().lower()
+        port = url.port(443 if url.scheme() == "https" else 80)
+        self.onion_label.setText(tr("onion_checking", host=host))
+        self.onion_bar.show()
+
+        def done(code: int) -> None:
+            if self._locking or self.view.url().host().lower() != host:
+                return
+            key = onion_probe.reason_key(code)
+            if key is None:          # reachable now: it was a transient failure
+                self.onion_label.setText(tr("onion_now_ok"))
+            else:
+                self.onion_label.setText(tr(key) + f"  [Tor 0x{code:02X}]")
+
+        run_async(lambda: onion_probe.probe(host, port), done,
+                  lambda exc: self.onion_label.setText(tr("onion_err_general") + f" ({exc})"))
 
     def _detect_language(self, callback) -> None:
         def got_sample(sample) -> None:
