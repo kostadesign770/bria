@@ -1,0 +1,284 @@
+<title>מדף ספרי המאמרים</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D shelf, a quiet header and a hint bar floating over it */
+:root{
+  --bg:#e9e4dc; --fg:#2a1d16; --muted:#6d5a4c; --panel:rgba(250,246,240,.86);
+  --line:rgba(60,40,28,.18); --gold:#a8792c;
+  --display:"Frank Ruhl Libre","David Libre","Times New Roman",serif;
+  --body:"Heebo","Arial Hebrew",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17120f; --fg:#efe6da; --muted:#b4a392; --panel:rgba(28,22,18,.82); --line:rgba(240,220,190,.16); --gold:#d9b46a; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#17120f; --fg:#efe6da; --muted:#b4a392; --panel:rgba(28,22,18,.82); --line:rgba(240,220,190,.16); --gold:#d9b46a; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);overflow:hidden;direction:rtl}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  padding-top:calc(14px + env(safe-area-inset-top,0px));padding-bottom:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;backdrop-filter:blur(8px);pointer-events:auto;min-width:0}
+h1{margin:0;font-family:var(--display);font-weight:900;font-size:clamp(20px,2.4vw,28px);line-height:1.1;text-wrap:balance}
+.sub{margin:4px 0 0;color:var(--muted);font-size:13px}
+.sub b{color:var(--gold);font-weight:500}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+button{font:500 13px var(--body);color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+button:hover{border-color:var(--gold)}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+.hint{position:fixed;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
+  font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis}
+#tip{position:fixed;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;
+  font-family:var(--display);font-weight:700;font-size:15px;color:var(--fg);transform:translate(-50%,-130%);white-space:nowrap}
+#loading{position:fixed;inset:0;display:grid;place-items:center;font-family:var(--display);font-size:18px;color:var(--muted)}
+@media (max-width:560px){.top{flex-direction:column}.controls{justify-content:flex-start}}
+</style>
+
+<div id="stage"></div>
+<div id="loading">בונה את המדף…</div>
+<div class="top">
+  <div class="card">
+    <h1>מדף ספרי המאמרים</h1>
+    <p class="sub"><b>30</b> כרכים · גובה אחיד · עיצוב שדרה אחיד</p>
+  </div>
+  <div class="controls">
+    <button id="bWidth" type="button" aria-pressed="false">עובי אחיד</button>
+    <button id="bSpin" type="button" aria-pressed="false">סיבוב אוטומטי</button>
+    <button id="bReset" type="button">איפוס מבט</button>
+  </div>
+</div>
+<div class="hint">גרירה לסיבוב · גלגלת או צביטה לזום · גרירה ימנית / שתי אצבעות להזזה</div>
+<div id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(async function(){
+// ---------- data: left to right as on the shelf ----------
+const SM=['ספר','המאמרים'];
+const BOOKS=[
+ {top:['תורת','שלום'],main:['ספר','השיחות'],w:117},
+ {top:SM,main:['פר״ת'],w:105},
+ {top:SM,main:['עטר״ת'],w:131},
+ {top:SM,main:['תרע״ח'],w:138},
+ {top:SM,main:['עזר״ת'],w:88},
+ {top:SM,main:['תער״ב-ע״ו'],w:127},
+ {top:['בשעה','שהקדימו'],main:['תער״ב'],vol:'ה',w:96},
+ {top:['בשעה','שהקדימו'],main:['תער״ב'],vol:'ג',w:135},
+ {top:['בשעה','שהקדימו'],main:['תער״ב'],vol:'ב',w:108},
+ {top:SM,main:['אעת״ו'],w:100},
+ {top:SM,main:['עת״ר'],w:133},
+ {top:SM,main:['תרס״ט'],w:123},
+ {top:SM,main:['תרס״ח'],w:115},
+ {top:SM,main:['תרס״ו','תרס״ז'],w:118},
+ {top:['יום טוב של','ראש השנה'],main:['תרס״ו'],w:180},
+ {top:SM,main:['תרס״ה'],w:164},
+ {top:SM,main:['תרס״ד'],w:112},
+ {top:SM,main:['תרס״ג'],vol:'ב',w:123},
+ {top:SM,main:['תרס״ג'],vol:'א',w:96},
+ {top:SM,main:['תר״ס','תרס״א','תרס״ב'],w:147},
+ {top:SM,main:['תרנ״ט'],w:122},
+ {top:['הגהות','לד״ה פתח','אליהו'],main:['תרנ״ח'],w:78},
+ {top:SM,main:['תרנ״ח'],w:103},
+ {top:SM,main:['תרנ״ז'],w:129},
+ {top:SM,main:['תרנ״ה','תרנ״ו'],w:147},
+ {top:SM,main:['תרנ״ד'],w:152},
+ {top:SM,main:['תרנ״ב','תרנ״ג'],w:133},
+ {top:SM,main:['תרנ״א'],w:127},
+ {top:SM,main:['תרמ״ט','תר״ן'],w:157},
+ {top:SM,main:['תרמ״ג','תרמ״ד','תרמ״ה'],w:134},
+];
+const H=24, D=17, PX_PER_CM=860/24, GAP=0.06;
+BOOKS.forEach(b=>b.cm=b.w/PX_PER_CM);
+const AVG=BOOKS.reduce((s,b)=>s+b.cm,0)/BOOKS.length;
+
+try{ await Promise.race([Promise.all([
+  document.fonts.load('900 60px "Frank Ruhl Libre"'),document.fonts.load('700 60px "Frank Ruhl Libre"')]),
+  new Promise(r=>setTimeout(r,2500))]); }catch(e){}
+
+// ---------- shared leather pattern ----------
+function rng(seed){return()=>((seed=Math.imul(seed^seed>>>15,seed|1)^(seed+Math.imul(seed^seed>>>7,seed|61)))>>>0)/4294967296}
+const leather=document.createElement('canvas'); leather.width=256; leather.height=256;
+{const c=leather.getContext('2d'),r=rng(7); c.fillStyle='#3a1f14'; c.fillRect(0,0,256,256);
+ for(let i=0;i<9000;i++){const x=r()*256,y=r()*256,s=r()*2.2+.4,l=r();
+  c.fillStyle=l<.5?`rgba(20,8,4,${.15+r()*.35})`:`rgba(120,72,44,${.06+r()*.18})`;
+  c.beginPath();c.ellipse(x,y,s,s*(.5+r()),r()*3,0,7);c.fill();}}
+
+// ---------- one spine template, drawn identically for every book ----------
+const TH=1024;
+function spine(book,cmW){
+  const W=Math.max(64,Math.round(TH*cmW/H));
+  const col=document.createElement('canvas'); col.width=W; col.height=TH;
+  const mr=document.createElement('canvas'); mr.width=W; mr.height=TH; // G=roughness, B=metalness
+  const c=col.getContext('2d'), m=mr.getContext('2d');
+  const gold=y0=>{const g=c.createLinearGradient(0,y0-14,0,y0+14);g.addColorStop(0,'#fff0b8');g.addColorStop(.45,'#e2bc68');g.addColorStop(1,'#9c7128');return g};
+  // base leather
+  c.fillStyle=c.createPattern(leather,'repeat'); c.fillRect(0,0,W,TH);
+  m.fillStyle='rgb(0,205,0)'; m.fillRect(0,0,W,TH);
+  const both=(fnC,mStyle)=>{fnC(c,true);m.fillStyle=mStyle;m.strokeStyle=mStyle;fnC(m,false)};
+  // wavy gold band at fraction f
+  function band(f,h=0.022){
+    const y=f*TH, hh=h*TH, amp=hh*0.22, k=Math.max(1,Math.round(W/(TH*0.09)));
+    both((x,isC)=>{
+      if(isC) x.fillStyle=gold(y);
+      x.beginPath(); x.moveTo(0,y-hh/2);
+      for(let i=0;i<=W;i+=2) x.lineTo(i,y-hh/2+Math.sin(i/W*Math.PI*2*k)*amp);
+      for(let i=W;i>=0;i-=2) x.lineTo(i,y+hh/2+Math.sin(i/W*Math.PI*2*k+1.2)*amp);
+      x.closePath(); x.fill();
+      x.fillRect(0,y-hh/2-hh*0.55,W,Math.max(2,hh*0.16));
+      x.fillRect(0,y+hh/2+hh*0.4,W,Math.max(2,hh*0.12));
+    },'rgb(0,80,255)');
+  }
+  // navy label panel
+  const L0=0.215, L1=0.475;
+  both((x,isC)=>{ if(isC){const g=x.createLinearGradient(0,L0*TH,0,L1*TH);g.addColorStop(0,'#223042');g.addColorStop(1,'#151d29');x.fillStyle=g;}
+    x.fillRect(0,L0*TH,W,(L1-L0)*TH)},'rgb(0,150,0)');
+  [0.07,L0,L1,0.745,0.935].forEach(f=>band(f));
+  // gold text helper with auto-fit
+  function text(str,y,size,weight){
+    const maxW=W*0.84; c.font=`${weight} ${size}px "Frank Ruhl Libre",serif`;
+    const mw=c.measureText(str).width; if(mw>maxW) size=size*maxW/mw;
+    both((x,isC)=>{x.font=`${weight} ${size}px "Frank Ruhl Libre",serif`;x.direction='rtl';x.textAlign='center';x.textBaseline='middle';
+      if(isC){x.fillStyle=gold(y);x.shadowColor='rgba(0,0,0,.45)';x.shadowBlur=2;x.shadowOffsetY=1}
+      x.fillText(str,W/2,y); x.shadowColor='transparent'},'rgb(0,70,255)');
+  }
+  // fixed text block positions (same on every spine)
+  const tN=book.top.length, tSize=TH*0.038, tLine=TH*0.04;
+  const tStart=TH*(L0+0.045)-((tN-1)*tLine)/2+ (tN>2?tLine*0.5:0);
+  book.top.forEach((s,i)=>text(s,tStart+i*tLine,tSize,700));
+  const dotY=TH*(L0+0.118);
+  both((x,isC)=>{if(isC)x.fillStyle=gold(dotY);x.beginPath();x.arc(W/2,dotY,TH*0.006,0,7);x.fill()},'rgb(0,70,255)');
+  const mN=book.main.length, mSize=TH*(mN>2?0.036:0.048), mLine=mSize*1.08;
+  const mMid=TH*(L0+0.19);
+  book.main.forEach((s,i)=>text(s,mMid+(i-(mN-1)/2)*mLine,mSize,900));
+  if(book.vol) text(book.vol,TH*0.6,TH*0.05,900);
+  // emblem: gold shield with inner medallion
+  const ex=W/2, ey=TH*0.84, er=Math.min(W*0.36,TH*0.05);
+  const shield=x=>{x.beginPath();x.moveTo(ex-er,ey-er*1.05);x.quadraticCurveTo(ex,ey-er*1.35,ex+er,ey-er*1.05);
+    x.lineTo(ex+er,ey+er*0.2);x.quadraticCurveTo(ex+er*0.9,ey+er*1.0,ex,ey+er*1.3);x.quadraticCurveTo(ex-er*0.9,ey+er*1.0,ex-er,ey+er*0.2);x.closePath()};
+  both((x,isC)=>{if(isC)x.fillStyle=gold(ey);shield(x);x.fill()},'rgb(0,70,255)');
+  c.save();c.translate(ex,ey);c.scale(.86,.86);c.translate(-ex,-ey);c.fillStyle='#2a1a12';shield(c);c.fill();c.restore();
+  m.save();m.translate(ex,ey);m.scale(.86,.86);m.translate(-ex,-ey);m.fillStyle='rgb(0,170,0)';shield(m);m.fill();m.restore();
+  both((x,isC)=>{if(isC)x.strokeStyle=gold(ey);x.lineWidth=er*0.1;x.beginPath();x.arc(ex,ey,er*0.58,0,7);x.stroke()},'rgb(0,70,255)');
+  text('ה',ey+er*0.02,er*0.85,900);
+  // rounded-spine shading
+  const sh=c.createLinearGradient(0,0,W,0);
+  sh.addColorStop(0,'rgba(0,0,0,.55)');sh.addColorStop(.18,'rgba(0,0,0,.08)');sh.addColorStop(.5,'rgba(255,240,220,.05)');sh.addColorStop(.82,'rgba(0,0,0,.08)');sh.addColorStop(1,'rgba(0,0,0,.55)');
+  c.fillStyle=sh;c.fillRect(0,0,W,TH);
+  const vs=c.createLinearGradient(0,0,0,TH);vs.addColorStop(0,'rgba(0,0,0,.35)');vs.addColorStop(.015,'rgba(0,0,0,0)');vs.addColorStop(.985,'rgba(0,0,0,0)');vs.addColorStop(1,'rgba(0,0,0,.35)');
+  c.fillStyle=vs;c.fillRect(0,0,W,TH);
+  return {col,mr};
+}
+
+// ---------- three.js scene ----------
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=0.9;
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#2b2420');
+const camera=new THREE.PerspectiveCamera(32,1,0.5,800);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.dampingFactor=0.08;
+controls.minPolarAngle=0.35; controls.maxPolarAngle=Math.PI/2+0.05;
+controls.minDistance=12; controls.maxDistance=320;
+
+// environment for metallic gold
+{const pm=new THREE.PMREMGenerator(renderer); const env=new THREE.Scene();
+ env.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16),new THREE.MeshBasicMaterial({color:0x3a302a,side:THREE.BackSide})));
+ const panel=(c,x,y,z,w,h)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide}));p.position.set(x,y,z);p.lookAt(0,0,0);env.add(p)};
+ panel(0xfff4e0,0,30,20,40,14); panel(0xffe7c4,-35,10,10,14,30); panel(0xd8e4ff,35,15,-10,16,26); panel(0xffffff,0,5,40,30,10);
+ scene.environment=pm.fromScene(env,0.03).texture;}
+
+scene.add(new THREE.HemisphereLight(0xfff3e2,0x3a2a20,0.55));
+const key=new THREE.DirectionalLight(0xfff0dc,1.6); key.position.set(-30,60,55); key.castShadow=true;
+key.shadow.mapSize.set(2048,2048); Object.assign(key.shadow.camera,{left:-70,right:70,top:40,bottom:-20,near:1,far:200}); key.shadow.bias=-0.0006;
+scene.add(key);
+const fill=new THREE.DirectionalLight(0xd6e2ff,0.35); fill.position.set(40,20,40); scene.add(fill);
+
+// shared materials
+const leatherTex=new THREE.CanvasTexture(leather); leatherTex.wrapS=leatherTex.wrapT=THREE.RepeatWrapping; leatherTex.repeat.set(4,2); leatherTex.encoding=THREE.sRGBEncoding;
+const coverMat=new THREE.MeshStandardMaterial({map:leatherTex,roughness:.78,metalness:0,bumpMap:leatherTex,bumpScale:.04});
+function pagesCanvas(lines){const cv=document.createElement('canvas');cv.width=64;cv.height=256;const c=cv.getContext('2d');c.fillStyle='#e8dcc4';c.fillRect(0,0,64,256);
+  const r=rng(3);for(let i=0;i<lines;i++){c.fillStyle=`rgba(120,95,60,${r()*.18})`;c.fillRect(0,r()*256,64,1)}return cv}
+const pageTop=new THREE.CanvasTexture(pagesCanvas(60)); pageTop.encoding=THREE.sRGBEncoding;
+const pageMat=new THREE.MeshStandardMaterial({map:pageTop,roughness:.95});
+const boardMat=new THREE.MeshStandardMaterial({color:0x3e2418,roughness:.7});
+
+const group=new THREE.Group(); scene.add(group);
+const meshes=[];
+let uniform=false;
+function build(){
+  meshes.forEach(m=>{group.remove(m);m.geometry.dispose();m.material[4].map.dispose();m.material[4].roughnessMap.dispose();m.material[4].dispose()}); meshes.length=0;
+  const widths=BOOKS.map(b=>uniform?AVG:b.cm);
+  const total=widths.reduce((s,w)=>s+w,0)+GAP*(BOOKS.length-1);
+  // shelf reads right-to-left in the photo order: first book on the left
+  let x=-total/2;
+  BOOKS.forEach((b,i)=>{
+    const w=widths[i]; const {col,mr}=spine(b,w);
+    const t=new THREE.CanvasTexture(col); t.encoding=THREE.sRGBEncoding; t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+    const r=new THREE.CanvasTexture(mr);
+    const spineMat=new THREE.MeshStandardMaterial({map:t,roughnessMap:r,metalnessMap:r,roughness:1,metalness:1,bumpMap:leatherTex,bumpScale:.02,envMapIntensity:1.1});
+    const geo=new THREE.BoxGeometry(w,H,D);
+    const mesh=new THREE.Mesh(geo,[coverMat,coverMat,pageMat,boardMat,spineMat,pageMat]);
+    mesh.position.set(x+w/2,H/2,0); mesh.castShadow=mesh.receiveShadow=true; mesh.userData=b;
+    group.add(mesh); meshes.push(mesh); x+=w+GAP;
+  });
+  shelf.scale.x=(total+8)/100;
+  return total;
+}
+// shelf, wall
+const woodCv=document.createElement('canvas');woodCv.width=1024;woodCv.height=64;
+{const c=woodCv.getContext('2d'),r=rng(11);c.fillStyle='#8a5f3c';c.fillRect(0,0,1024,64);
+ for(let i=0;i<140;i++){c.strokeStyle=`rgba(${60+r()*40},${35+r()*20},20,${.15+r()*.25})`;c.lineWidth=r()*2+.5;c.beginPath();const y=r()*64;c.moveTo(0,y);
+  for(let xx=0;xx<=1024;xx+=32)c.lineTo(xx,y+Math.sin(xx/90+i)*2*r());c.stroke()}}
+const woodTex=new THREE.CanvasTexture(woodCv);woodTex.encoding=THREE.sRGBEncoding;
+const shelf=new THREE.Mesh(new THREE.BoxGeometry(100,1.6,24),new THREE.MeshStandardMaterial({map:woodTex,roughness:.6}));
+shelf.position.set(0,-0.8,0.5); shelf.receiveShadow=true; scene.add(shelf);
+const wall=new THREE.Mesh(new THREE.PlaneGeometry(600,300),new THREE.MeshStandardMaterial({color:0x4a3e36,roughness:1}));
+wall.position.set(0,60,-12); wall.receiveShadow=true; scene.add(wall);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(600,300),new THREE.MeshStandardMaterial({color:0x2a221d,roughness:1}));
+floor.rotation.x=-Math.PI/2; floor.position.y=-1.6; scene.add(floor);
+
+let total=build();
+document.getElementById('loading').remove();
+
+function frame(){
+  const a=camera.aspect, vf=THREE.MathUtils.degToRad(camera.fov);
+  const span=a<1?Math.min(total,48):total;
+  const hf=2*Math.atan(Math.tan(vf/2)*a);
+  const dist=Math.max((span/2*1.08)/Math.tan(hf/2),(H*1.5/2)/Math.tan(vf/2));
+  controls.target.set(0,H*0.48,8.5);
+  camera.position.set(-dist*0.12,H*0.55+dist*0.14,8.5+dist*0.99);
+  controls.update();
+}
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+resize(); frame();
+addEventListener('resize',()=>{resize()});
+
+const bW=document.getElementById('bWidth'), bS=document.getElementById('bSpin');
+bW.onclick=()=>{uniform=!uniform;bW.setAttribute('aria-pressed',uniform);total=build();};
+bS.onclick=()=>{controls.autoRotate=!controls.autoRotate;controls.autoRotateSpeed=0.6;bS.setAttribute('aria-pressed',controls.autoRotate)};
+document.getElementById('bReset').onclick=()=>{controls.autoRotate=false;bS.setAttribute('aria-pressed','false');frame()};
+if(matchMedia('(prefers-reduced-motion: reduce)').matches) controls.enableDamping=false;
+
+// hover title
+const tip=document.getElementById('tip'), ray=new THREE.Raycaster(), ptr=new THREE.Vector2();
+renderer.domElement.addEventListener('pointermove',e=>{
+  const r=renderer.domElement.getBoundingClientRect(); ptr.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  ray.setFromCamera(ptr,camera); const hit=ray.intersectObjects(meshes)[0];
+  if(hit&&e.pointerType!=='touch'){const b=hit.object.userData;tip.textContent=[...b.top,...b.main].join(' ')+(b.vol?` · כרך ${b.vol}`:'');
+    tip.style.left=e.clientX+'px';tip.style.top=e.clientY+'px';tip.hidden=false}else tip.hidden=true;
+});
+renderer.domElement.addEventListener('pointerleave',()=>tip.hidden=true);
+
+(function loop(){controls.update();renderer.render(scene,camera);requestAnimationFrame(loop)})();
+})();
+</script>
